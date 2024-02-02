@@ -54,6 +54,10 @@ app.all('/run_js_from_ipfs/:cid', async (c) => {
     noInitWarn: true,
   }))
   await api.isReady
+
+  const apiReady = Date.now()
+  console.log(`api ready took ${apiReady - fetched}ms`)
+
   const client = new OnChainRegistry(api)
   await client.connect({
     clusterId: '0x0000000000000000000000000000000000000000000000000000000000000001',
@@ -64,11 +68,14 @@ app.all('/run_js_from_ipfs/:cid', async (c) => {
   const contractId = '0xf0a398600f02ea9b47a86c59aed61387e450e2a99cb8b921cd1d46f734e45409'
   const contractKey = '0x64fb31ec8dd6aebb8889ca3678f21696d8348e796966a963904b70f557a2331d'
 
+  const clientReady = Date.now()
+  console.log(`client ready took ${clientReady - apiReady}ms`)
+
   const provider = await KeyringPairProvider.createFromSURI(client.api, '//Alice')
   const contract = new PinkContractPromise(api, client, new Abi(abi), contractId, contractKey, provider)
 
-  const ready = Date.now()
-  console.log(`ready took ${ready - fetched}ms`)
+  const keyringReady = Date.now()
+  console.log(`keyring ready took ${keyringReady - clientReady}ms`)
 
   let body = undefined
   if (c.req.method === 'POST' || c.req.method === 'PATCH' || c.req.method === 'PUT') {
