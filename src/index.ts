@@ -36,12 +36,17 @@ const fetchIpfsFile = asyncMemoizeWith(i => `${i}`, (cid) => fetch(`https://clou
 const memoizeFetchMetadata = asyncMemoizeWith(i => `${i}`, fetchMetadata)
 
 app.all('/run_js_from_ipfs/:cid', async (c) => {
+  const begin = Date.now()
+
   const [code, abi, metadata] = await Promise.all([
     fetchIpfsFile(c.req.param('cid')),
     fetchAbi('0xb4ed291971360ff5de17845f9922a2bd6930e411e32f33bf0a321735c3fab4a5'),
     memoizeFetchMetadata('wss://poc6.phala.network/ws'),
     cryptoWaitReady(),
   ])
+
+  const fetched = Date.now()
+  console.log(`fetching took ${fetched - begin}ms`)
 
   const api = new ApiPromise(options({
     provider: new HttpProvider('https://poc6.phala.network/ws'),
@@ -61,6 +66,9 @@ app.all('/run_js_from_ipfs/:cid', async (c) => {
 
   const provider = await KeyringPairProvider.createFromSURI(client.api, '//Alice')
   const contract = new PinkContractPromise(api, client, new Abi(abi), contractId, contractKey, provider)
+
+  const ready = Date.now()
+  console.log(`ready took ${ready - fetched}ms`)
 
   let body = undefined
   if (c.req.method === 'POST' || c.req.method === 'PATCH' || c.req.method === 'PUT') {
@@ -82,6 +90,9 @@ app.all('/run_js_from_ipfs/:cid', async (c) => {
   })
   console.log(result.output.toHuman())
   const payload = JSON.parse(result.output?.asOk.asOk.asString.toString() ?? '{}')
+
+  const processed = Date.now()
+  console.log(`processing took ${processed - ready}ms`)
 
   return c.body(payload.body ?? '', payload.status ?? 200, payload.headers ?? {})
 })
