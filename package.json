@@ -1,0 +1,15 @@
+{
+  "scripts": {
+    "dev": "tsx watch src/index.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.7.0",
+    "@phala/sdk": "^0.6.0-beta.14",
+    "hono": "^3.12.8",
+    "ramda": "^0.29.1"
+  },
+  "devDependencies": {
+    "@types/ramda": "^0.29.10",
+    "tsx": "^3.12.2"
+  }
+}
