@@ -1,60 +1,64 @@
 import type { Result, Text, Enum } from '@polkadot/types-codec'
+
 import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
-import { getClient, getContract, KeyringPairProvider, unsafeGetAbiFromPatronByCodeHash } from '@phala/sdk'
-import * as R from 'ramda'
+import { cryptoWaitReady } from '@polkadot/util-crypto'
+import { HttpProvider, ApiPromise } from '@polkadot/api'
+import { Abi } from '@polkadot/api-contract/Abi'
+import { options, OnChainRegistry, KeyringPairProvider, unsafeGetAbiFromPatronByCodeHash, fetchMetadata, PinkContractPromise } from '@phala/sdk'
 
 const app = new Hono()
-
-const code = `
-(()=>{"use strict";globalThis.scriptOutput=function(t){return JSON.stringify({status:200,headers:{"content-type":"text/plain"},body:"Hello, world!"})}.apply(null,globalThis.scriptArgs)})();
-`
 
 interface RunResult extends Enum {
   asString: Text
 }
 
 
-function asyncMemoizeWith(keyGen, asyncFn) {
+function asyncMemoizeWith<TResult = unknown, TArgs extends Array<any> = any[]>(keyGen: (...args: TArgs) => string, asyncFn: (...args: TArgs) => Promise<TResult>) {
   const cache = new Map()
-  return async (...args) => {
-    const key = keyGen.apply(this, args)
+  return async function (...args: TArgs) {
+    const key = keyGen.apply(null, args)
     if (cache.has(key)) {
       console.log(`cache hit: ${key}`)
       return cache.get(key)
     }
     console.log(`cache miss: ${key}`)
-    const result = await asyncFn.apply(this, args)
+    const result = await asyncFn.apply(null, args)
     cache.set(key, result)
     return result
   }
 }
 
-const fetchAbi = asyncMemoizeWith(i => `${i}`, async (codeHash) => {
-  return unsafeGetAbiFromPatronByCodeHash(codeHash)
-})
+const fetchAbi = asyncMemoizeWith(i => `${i}`, unsafeGetAbiFromPatronByCodeHash)
 
-const fetchIpfsFile = asyncMemoizeWith(i => `${i}`, async (cid) => {
-  const resp = await fetch(`https://cloudflare-ipfs.com/ipfs/${cid}`)
-  const text = await resp.text()
-  return text
-})
+const fetchIpfsFile = asyncMemoizeWith(i => `${i}`, (cid) => fetch(`https://cloudflare-ipfs.com/ipfs/${cid}`).then(r => r.text()))
 
 app.all('/run_js_from_ipfs/:cid', async (c) => {
-  const client = await getClient({
-    transport: 'wss://poc6.phala.network/ws',
-  })
-  const [file, abi] = await Promise.all([
+  const [code, abi, metadata] = await Promise.all([
     fetchIpfsFile(c.req.param('cid')),
-    fetchAbi('0xb4ed291971360ff5de17845f9922a2bd6930e411e32f33bf0a321735c3fab4a5')
+    fetchAbi('0xb4ed291971360ff5de17845f9922a2bd6930e411e32f33bf0a321735c3fab4a5'),
+    fetchMetadata('ws://poc6.phala.network/ws'),
+    cryptoWaitReady(),
   ])
-  const provider = await KeyringPairProvider.createFromSURI(client.api, '//Alice')
-  const contract = await getContract({
-    client,
-    provider,
-    abi,
-    contractId: '0xf0a398600f02ea9b47a86c59aed61387e450e2a99cb8b921cd1d46f734e45409',
+
+  const api = new ApiPromise(options({
+    provider: new HttpProvider('http://10.0.0.120:19944'),
+    metadata,
+    noInitWarn: true,
+  }))
+  await api.isReady
+  const client = new OnChainRegistry(api)
+  await client.connect({
+    clusterId: '0x0000000000000000000000000000000000000000000000000000000000000001',
+    pubkey: '0x923462b42d2213bcd908cf56e469e5404708b9020ca462f4b0441e4a53b0ab6c',
+    pruntimeURL: 'https://poc6.phala.network/pruntime/0x923462b4',
   })
+
+  const contractId = '0xf0a398600f02ea9b47a86c59aed61387e450e2a99cb8b921cd1d46f734e45409'
+  const contractKey = '0x64fb31ec8dd6aebb8889ca3678f21696d8348e796966a963904b70f557a2331d'
+
+  const provider = await KeyringPairProvider.createFromSURI(client.api, '//Alice')
+  const contract = new PinkContractPromise(api, client, new Abi(abi), contractId, contractKey, provider)
 
   let body = undefined
   if (c.req.method === 'POST' || c.req.method === 'PATCH' || c.req.method === 'PUT') {
@@ -65,15 +69,17 @@ app.all('/run_js_from_ipfs/:cid', async (c) => {
   const req = {
     method: c.req.method,
     path: c.req.path,
+    // @ts-ignore
     headers: Object.fromEntries(c.req.raw.headers.entries()),
     body,
   }
   console.log(req)
 
   const result = await contract.q.runJs<Result<RunResult, any>>({
-    args: ['SidevmQuickJS', code, [JSON.stringify(req)]]
+    args: ['SidevmQuickJSWithPolyfill', code, [JSON.stringify(req)]]
   })
-  const payload = JSON.parse(result.output?.asOk.asOk.asString ?? '{}')
+  console.log(result.output.toHuman())
+  const payload = JSON.parse(result.output?.asOk.asOk.asString.toString() ?? '{}')
 
   return c.body(payload.body ?? '', payload.status ?? 200, payload.headers ?? {})
 })
