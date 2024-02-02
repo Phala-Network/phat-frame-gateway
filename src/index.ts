@@ -33,11 +33,13 @@ const fetchAbi = asyncMemoizeWith(i => `${i}`, unsafeGetAbiFromPatronByCodeHash)
 
 const fetchIpfsFile = asyncMemoizeWith(i => `${i}`, (cid) => fetch(`https://cloudflare-ipfs.com/ipfs/${cid}`).then(r => r.text()))
 
+const memoizeFetchMetadata = asyncMemoizeWith(i => `${i}`, fetchMetadata)
+
 app.all('/run_js_from_ipfs/:cid', async (c) => {
   const [code, abi, metadata] = await Promise.all([
     fetchIpfsFile(c.req.param('cid')),
     fetchAbi('0xb4ed291971360ff5de17845f9922a2bd6930e411e32f33bf0a321735c3fab4a5'),
-    fetchMetadata('wss://poc6.phala.network/ws'),
+    memoizeFetchMetadata('wss://poc6.phala.network/ws'),
     cryptoWaitReady(),
   ])
 
