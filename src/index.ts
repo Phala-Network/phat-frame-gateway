@@ -37,12 +37,12 @@ app.all('/run_js_from_ipfs/:cid', async (c) => {
   const [code, abi, metadata] = await Promise.all([
     fetchIpfsFile(c.req.param('cid')),
     fetchAbi('0xb4ed291971360ff5de17845f9922a2bd6930e411e32f33bf0a321735c3fab4a5'),
-    fetchMetadata('ws://poc6.phala.network/ws'),
+    fetchMetadata('wss://poc6.phala.network/ws'),
     cryptoWaitReady(),
   ])
 
   const api = new ApiPromise(options({
-    provider: new HttpProvider('http://10.0.0.120:19944'),
+    provider: new HttpProvider('https://poc6.phala.network/ws'),
     metadata,
     noInitWarn: true,
   }))
