@@ -63,6 +63,14 @@ const getClient = memoize(
   }
 )
 
+function inheritVault(parents: Record<string, any>, data: Record<string, any>) {
+  return R.mergeDeepWith(
+    (l, r) => Array.isArray(l) ? R.concat(l, r) : r,
+    parents,
+    data
+  )
+}
+
 //
 
 export async function runJs<TContext extends Context>(c: TContext) {
@@ -114,7 +122,7 @@ export async function runJs<TContext extends Context>(c: TContext) {
       if (raw) {
         const parsed = JSON.parse(raw)
         if (parsed && parsed.data && parsed.cid === c.req.param('cid')) {
-          secret = R.mergeDeepWithKey(parsed.parents, parsed.data)
+          secret = inheritVault(parsed.parents || {}, parsed.data)
         }
       }
     }
@@ -177,7 +185,7 @@ export async function saveSecret<TContext extends Context<any, any, { out: { jso
         const payload = JSON.stringify({
           token,
           cid,
-          parents: R.mergeDeepWithKey(parsed.parents ?? {}, parsed.data),
+          parents: inheritVault(parsed.parents ?? {}, parsed.data),
           inherit,
           data,
         })
