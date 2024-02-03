@@ -42,7 +42,7 @@ export function memoize<TResult = unknown, TArgs extends Array<any> = any[]>(
             const result = await redis.get(key)
             if (result) {
               console.log(`cache hit: ${key}`)
-              return JSON.parse(result)
+              return JSON.parse(result).data
             }
             break
 
@@ -59,7 +59,8 @@ export function memoize<TResult = unknown, TArgs extends Array<any> = any[]>(
               throw new Error(`malformed key: ${key}`)
             }
             console.log(`cache hit: ${key}`)
-            return fs.readFileSync(fullpath, 'utf-8')
+            const raw = fs.readFileSync(fullpath, 'utf-8')
+            return JSON.parse(raw)
         }
       }
 
@@ -76,7 +77,7 @@ export function memoize<TResult = unknown, TArgs extends Array<any> = any[]>(
             if (!redis) {
               throw new Error('redis adapter requires setup environment variable MEMOIZE_REDIS_URI first.')
             }
-            await redis.set(key, JSON.stringify(result), 'EX', ttl)
+            await redis.set(key, JSON.stringify({data: result}), 'EX', ttl)
             break
 
           case 'fs':

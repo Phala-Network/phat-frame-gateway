@@ -125,13 +125,18 @@ export async function runJs<TContext extends Context>(c: TContext) {
       // @ts-ignore
       headers: Object.fromEntries(c.req.raw.headers.entries()),
       body,
-      secret,
+      secret: secret || undefined,
     }
 
     const result = await contract.q.runJs<Result<RunResult, any>>({
       args: ['SidevmQuickJSWithPolyfill', code, [JSON.stringify(req)]]
     })
-    const payload = JSON.parse(result.output?.asOk.asOk.asString.toString() ?? '{}')
+    let payload = {body: 'Script returns malformed response.', status: 400, headers: {}}
+    try {
+      payload = JSON.parse(result.output?.asOk.asOk.asString.toString() ?? '{}')
+    } catch (err) {
+      console.error(err)
+    }
 
     const processed = Date.now()
     console.log(`processing took ${processed - keyringReady}ms`)
