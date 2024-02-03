@@ -99,7 +99,7 @@ app.all('/run_js_from_ipfs/:cid', async (c) => {
   const payload = JSON.parse(result.output?.asOk.asOk.asString.toString() ?? '{}')
 
   const processed = Date.now()
-  console.log(`processing took ${processed - ready}ms`)
+  console.log(`processing took ${processed - keyringReady}ms`)
 
   return c.body(payload.body ?? '', payload.status ?? 200, payload.headers ?? {})
 })
