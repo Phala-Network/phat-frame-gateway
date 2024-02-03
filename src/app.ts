@@ -1,66 +1,68 @@
 import type { Result, Text, Enum } from '@polkadot/types-codec'
+import type { Context } from 'hono'
 
-import { serve } from '@hono/node-server'
-import { Hono } from 'hono'
 import { cryptoWaitReady } from '@polkadot/util-crypto'
 import { HttpProvider, ApiPromise } from '@polkadot/api'
 import { Abi } from '@polkadot/api-contract/Abi'
-import { options, OnChainRegistry, KeyringPairProvider, unsafeGetAbiFromPatronByCodeHash, fetchMetadata, PinkContractPromise } from '@phala/sdk'
+import { options, OnChainRegistry, KeyringPairProvider, unsafeGetAbiFromPatronByCodeHash, fetchMetadata, PinkContractPromise, type LiteralRpc } from '@phala/sdk'
 
-const app = new Hono()
+import { memoize } from './memoize'
 
 interface RunResult extends Enum {
   asString: Text
 }
 
+const fetchAbi = memoize(
+  {
+    keyGen: (codeHash: string) => `abis/${codeHash}`,
+    adapters: ['fs'],
+  },
+  unsafeGetAbiFromPatronByCodeHash
+)
 
-function asyncMemoizeWith<TResult = unknown, TArgs extends Array<any> = any[]>(keyGen: (...args: TArgs) => string, asyncFn: (...args: TArgs) => Promise<TResult>) {
-  const cache = new Map()
-  return async function (...args: TArgs) {
-    const key = keyGen.apply(null, args)
-    if (cache.has(key)) {
-      console.log(`cache hit: ${key}`)
-      return cache.get(key)
-    }
-    console.log(`cache miss: ${key}`)
-    const result = await asyncFn.apply(null, args)
-    cache.set(key, result)
-    return result
-  }
-}
+const fetchIpfsFile = memoize(
+  {
+    keyGen: (cid: string) => `ipfs/${cid}`,
+    adapters: ['fs', 'redis'],
+  },
+  (cid: string) => fetch(`https://cloudflare-ipfs.com/ipfs/${cid}`).then(r => r.text()),
+)
 
-const fetchAbi = asyncMemoizeWith(i => `${i}`, unsafeGetAbiFromPatronByCodeHash)
+const memoizedFetchMetadata = memoize(
+  {
+    keyGen: (url: string) => `metadata/${url}`,
+    adapters: ['redis'],
+  },
+  fetchMetadata
+)
 
-const fetchIpfsFile = asyncMemoizeWith(i => `${i}`, (cid) => fetch(`https://cloudflare-ipfs.com/ipfs/${cid}`).then(r => r.text()))
-
-const memoizeFetchMetadata = asyncMemoizeWith(i => `${i}`, fetchMetadata)
-
-//
-
-let _instance: OnChainRegistry | null = null
-
-async function getClientSingleton() {
-  if (_instance === null) {
+const getClient = memoize(
+  {
+    keyGen: (..._args) => 'client',
+    adapters: ['memory'],
+  },
+  async (chainRpc: string, pruntimeUrl: string, pruntimePubkey: string) => {
+    const http = chainRpc.replace('wss://', 'https://').replace('ws://', 'http://')
+    const ws = chainRpc.replace('https://', 'wss://').replace('http://', 'ws://') as LiteralRpc
     const api = new ApiPromise(options({
-      provider: new HttpProvider('https://poc6.phala.network/ws'),
-      metadata: await memoizeFetchMetadata('wss://poc6.phala.network/ws'),
+      provider: new HttpProvider(http),
+      metadata: await memoizedFetchMetadata(ws),
       noInitWarn: true,
     }))
     await api.isReady
     const client = new OnChainRegistry(api)
     await client.connect({
       clusterId: '0x0000000000000000000000000000000000000000000000000000000000000001',
-      pubkey: '0x923462b42d2213bcd908cf56e469e5404708b9020ca462f4b0441e4a53b0ab6c',
-      pruntimeURL: 'https://poc6.phala.network/pruntime/0x923462b4',
+      pubkey: pruntimePubkey,
+      pruntimeURL: pruntimeUrl,
     })
-    _instance = client
+    return client
   }
-  return _instance
-}
+)
 
 //
 
-app.all('/run_js_from_ipfs/:cid/:id?', async (c) => {
+export async function handle<TContext extends Context>(c: TContext) {
   const begin = Date.now()
 
   const [code, abi] = await Promise.all([
@@ -72,12 +74,16 @@ app.all('/run_js_from_ipfs/:cid/:id?', async (c) => {
   const fetched = Date.now()
   console.log(`fetching took ${fetched - begin}ms`)
 
-  const client = await getClientSingleton()
+  const client = await getClient(
+    process.env.PHAT_CHAIN_RPC!,
+    process.env.PHAT_PRUNTIME_URI!,
+    process.env.PHAT_PRUNTIME_PUBKEY!,
+  )
   const clientReady = Date.now()
   console.log(`client ready took ${clientReady - fetched}ms`)
 
-  const contractId = '0xf0a398600f02ea9b47a86c59aed61387e450e2a99cb8b921cd1d46f734e45409'
-  const contractKey = '0x64fb31ec8dd6aebb8889ca3678f21696d8348e796966a963904b70f557a2331d'
+  const contractId = process.env.JS_CONTRACT_ID!
+  const contractKey = process.env.JS_CONTRACT_KEY!
 
   const provider = await KeyringPairProvider.createFromSURI(client.api, '//Alice')
   const contract = new PinkContractPromise(client.api, client, new Abi(abi), contractId, contractKey, provider)
@@ -109,6 +115,4 @@ app.all('/run_js_from_ipfs/:cid/:id?', async (c) => {
   console.log(`processing took ${processed - keyringReady}ms`)
 
   return c.body(payload.body ?? '', payload.status ?? 200, payload.headers ?? {})
-})
-
-serve(app)
+}
