@@ -60,7 +60,7 @@ async function getClientSingleton() {
 
 //
 
-app.all('/run_js_from_ipfs/:cid', async (c) => {
+app.all('/run_js_from_ipfs/:cid/:id?', async (c) => {
   const begin = Date.now()
 
   const [code, abi] = await Promise.all([
@@ -97,6 +97,7 @@ app.all('/run_js_from_ipfs/:cid', async (c) => {
     // @ts-ignore
     headers: Object.fromEntries(c.req.raw.headers.entries()),
     body,
+    id: c.req.param('id') ?? '',
   }
 
   const result = await contract.q.runJs<Result<RunResult, any>>({
