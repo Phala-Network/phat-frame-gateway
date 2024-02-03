@@ -1,5 +1,6 @@
 import type { Result, Text, Enum } from '@polkadot/types-codec'
 import type { Context } from 'hono'
+import { startTime, endTime } from 'hono/timing'
 import * as Bun from 'bun'
 import { cryptoWaitReady } from '@polkadot/util-crypto'
 import { HttpProvider, ApiPromise } from '@polkadot/api'
@@ -80,35 +81,37 @@ export async function runJs<TContext extends Context>(c: TContext) {
   const redis = new Redis(process.env.VAULT_REDIS_URI)
 
   try {
-    const begin = Date.now()
     const cid = c.req.param('cid')
 
-    const [code, abi] = await Promise.all([
+    //
+    // Boot
+    //
+    startTime(c, 'boot')
+    const [code, abi, client] = await Promise.all([
       fetchIpfsFile(cid),
       fetchAbi('0xb4ed291971360ff5de17845f9922a2bd6930e411e32f33bf0a321735c3fab4a5'),
+      getClient(
+        process.env.PHAT_CHAIN_RPC!,
+        process.env.PHAT_PRUNTIME_URI!,
+        process.env.PHAT_PRUNTIME_PUBKEY!,
+      ),
       cryptoWaitReady(),
     ])
 
-    const fetched = Date.now()
-    console.log(`fetching took ${fetched - begin}ms`)
-
-    const client = await getClient(
-      process.env.PHAT_CHAIN_RPC!,
-      process.env.PHAT_PRUNTIME_URI!,
-      process.env.PHAT_PRUNTIME_PUBKEY!,
+    
+    const contract = new PinkContractPromise(
+      client.api,
+      client,
+      new Abi(abi),
+      process.env.JS_CONTRACT_ID!,
+      process.env.JS_CONTRACT_KEY!,
+      await KeyringPairProvider.createFromSURI(client.api, '//Alice')
     )
-    const clientReady = Date.now()
-    console.log(`client ready took ${clientReady - fetched}ms`)
+    endTime(c, 'boot')
 
-    const contractId = process.env.JS_CONTRACT_ID!
-    const contractKey = process.env.JS_CONTRACT_KEY!
-
-    const provider = await KeyringPairProvider.createFromSURI(client.api, '//Alice')
-    const contract = new PinkContractPromise(client.api, client, new Abi(abi), contractId, contractKey, provider)
-
-    const keyringReady = Date.now()
-    console.log(`keyring ready took ${keyringReady - clientReady}ms`)
-
+    //
+    // Prepare payload
+    //
     let body = undefined
     if (c.req.method === 'POST' || c.req.method === 'PATCH' || c.req.method === 'PUT') {
       const buffer = await c.req.arrayBuffer()
@@ -136,6 +139,10 @@ export async function runJs<TContext extends Context>(c: TContext) {
       secret: secret || undefined,
     }
 
+    //
+    // Transform to PRuntime Query and execute
+    //
+    startTime(c, 'execute')
     const result = await contract.q.runJs<Result<RunResult, any>>({
       args: ['SidevmQuickJSWithPolyfill', code, [JSON.stringify(req)]]
     })
@@ -145,9 +152,7 @@ export async function runJs<TContext extends Context>(c: TContext) {
     } catch (err) {
       console.error(err)
     }
-
-    const processed = Date.now()
-    console.log(`processing took ${processed - keyringReady}ms`)
+    endTime(c, 'execute')
 
     return c.body(payload.body ?? '', payload.status ?? 200, payload.headers ?? {})
   } finally {

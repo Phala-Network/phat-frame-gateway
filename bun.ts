@@ -1,10 +1,14 @@
 import { Hono } from 'hono'
+import { logger } from 'hono/logger'
+import { timing } from 'hono/timing'
 import { zValidator } from '@hono/zod-validator'
 
 import { runJs, saveSecret, secretSchema, getSecret, visitSecretSchema } from './src/app'
 
 const app = new Hono()
 
+app.use('*', logger())
+app.use('*', timing())
 app.all('/run_js_from_ipfs/:cid/:key?', runJs)
 app.all('/ipfs/:cid/:key?', runJs)
 app.post('/vaults', zValidator('json', secretSchema), saveSecret)

@@ -30,7 +30,6 @@ export function memoize<TResult = unknown, TArgs extends Array<any> = any[]>(
         switch (adapter) {
           case 'memory':
             if (cache.has(key)) {
-              console.log(`cache hit: ${key}`)
               return cache.get(key)
             }
             break
@@ -41,7 +40,6 @@ export function memoize<TResult = unknown, TArgs extends Array<any> = any[]>(
             }
             const result = await redis.get(key)
             if (result) {
-              console.log(`cache hit: ${key}`)
               return JSON.parse(result).data
             }
             break
@@ -54,17 +52,13 @@ export function memoize<TResult = unknown, TArgs extends Array<any> = any[]>(
             }
             const fullpath = fs.realpathSync(unsafePath)
             if (!fullpath.startsWith(restrictPrefix)) {
-              console.log(fullpath)
-              console.log(unsafePath)
               throw new Error(`malformed key: ${key}`)
             }
-            console.log(`cache hit: ${key}`)
             const raw = fs.readFileSync(fullpath, 'utf-8')
             return JSON.parse(raw)
         }
       }
 
-      console.log(`cache miss: ${key}`)
       const result = await asyncFn.apply(null, args)
 
       for (let adapter of adapters) {
