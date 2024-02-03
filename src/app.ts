@@ -114,7 +114,7 @@ export async function runJs<TContext extends Context>(c: TContext) {
       if (raw) {
         const parsed = JSON.parse(raw)
         if (parsed && parsed.data && parsed.cid === c.req.param('cid')) {
-          secret = parsed.data
+          secret = R.mergeDeepWithKey(parsed.parents, parsed.data)
         }
       }
     }
@@ -171,10 +171,15 @@ export async function saveSecret<TContext extends Context<any, any, { out: { jso
       const secret = await redis.get(inherit)
       if (secret) {
         const parsed = JSON.parse(secret)
+        if (parsed.cid !== cid) {
+          return c.json({ error: 'Inherit from different cid is not allow', succeed: false }, 403)
+        }
         const payload = JSON.stringify({
           token,
           cid,
-          data: R.mergeDeepRight(parsed, data)
+          parents: R.mergeDeepWithKey(parsed.parents ?? {}, parsed.data),
+          inherit,
+          data,
         })
         const key = Bun.hash(`${cid}:${payload}`).toString(16)
         await redis.set(key, payload)
@@ -214,7 +219,7 @@ export async function getSecret<TContext extends Context<any, any, { out: { para
     if (raw) {
       const parsed = JSON.parse(raw)
       if (parsed.token === token) {
-        return c.json({ data: parsed.data, succeed: true })
+        return c.json({ data: parsed.data, inherit: parsed.inherit, succeed: true })
       } else {
         return c.json({ error: 'access denied', succeed: false }, 403)
       }
