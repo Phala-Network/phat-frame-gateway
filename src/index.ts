@@ -35,44 +35,52 @@ const fetchIpfsFile = asyncMemoizeWith(i => `${i}`, (cid) => fetch(`https://clou
 
 const memoizeFetchMetadata = asyncMemoizeWith(i => `${i}`, fetchMetadata)
 
+//
+
+let _instance: OnChainRegistry | null = null
+
+async function getClientSingleton() {
+  if (_instance === null) {
+    const api = new ApiPromise(options({
+      provider: new HttpProvider('https://poc6.phala.network/ws'),
+      metadata: await memoizeFetchMetadata('wss://poc6.phala.network/ws'),
+      noInitWarn: true,
+    }))
+    await api.isReady
+    const client = new OnChainRegistry(api)
+    await client.connect({
+      clusterId: '0x0000000000000000000000000000000000000000000000000000000000000001',
+      pubkey: '0x923462b42d2213bcd908cf56e469e5404708b9020ca462f4b0441e4a53b0ab6c',
+      pruntimeURL: 'https://poc6.phala.network/pruntime/0x923462b4',
+    })
+    _instance = client
+  }
+  return _instance
+}
+
+//
+
 app.all('/run_js_from_ipfs/:cid', async (c) => {
   const begin = Date.now()
 
-  const [code, abi, metadata] = await Promise.all([
+  const [code, abi] = await Promise.all([
     fetchIpfsFile(c.req.param('cid')),
     fetchAbi('0xb4ed291971360ff5de17845f9922a2bd6930e411e32f33bf0a321735c3fab4a5'),
-    memoizeFetchMetadata('wss://poc6.phala.network/ws'),
     cryptoWaitReady(),
   ])
 
   const fetched = Date.now()
   console.log(`fetching took ${fetched - begin}ms`)
 
-  const api = new ApiPromise(options({
-    provider: new HttpProvider('https://poc6.phala.network/ws'),
-    metadata,
-    noInitWarn: true,
-  }))
-  await api.isReady
-
-  const apiReady = Date.now()
-  console.log(`api ready took ${apiReady - fetched}ms`)
-
-  const client = new OnChainRegistry(api)
-  await client.connect({
-    clusterId: '0x0000000000000000000000000000000000000000000000000000000000000001',
-    pubkey: '0x923462b42d2213bcd908cf56e469e5404708b9020ca462f4b0441e4a53b0ab6c',
-    pruntimeURL: 'https://poc6.phala.network/pruntime/0x923462b4',
-  })
+  const client = await getClientSingleton()
+  const clientReady = Date.now()
+  console.log(`client ready took ${clientReady - fetched}ms`)
 
   const contractId = '0xf0a398600f02ea9b47a86c59aed61387e450e2a99cb8b921cd1d46f734e45409'
   const contractKey = '0x64fb31ec8dd6aebb8889ca3678f21696d8348e796966a963904b70f557a2331d'
 
-  const clientReady = Date.now()
-  console.log(`client ready took ${clientReady - apiReady}ms`)
-
   const provider = await KeyringPairProvider.createFromSURI(client.api, '//Alice')
-  const contract = new PinkContractPromise(api, client, new Abi(abi), contractId, contractKey, provider)
+  const contract = new PinkContractPromise(client.api, client, new Abi(abi), contractId, contractKey, provider)
 
   const keyringReady = Date.now()
   console.log(`keyring ready took ${keyringReady - clientReady}ms`)
@@ -90,12 +98,10 @@ app.all('/run_js_from_ipfs/:cid', async (c) => {
     headers: Object.fromEntries(c.req.raw.headers.entries()),
     body,
   }
-  console.log(req)
 
   const result = await contract.q.runJs<Result<RunResult, any>>({
     args: ['SidevmQuickJSWithPolyfill', code, [JSON.stringify(req)]]
   })
-  console.log(result.output.toHuman())
   const payload = JSON.parse(result.output?.asOk.asOk.asString.toString() ?? '{}')
 
   const processed = Date.now()
