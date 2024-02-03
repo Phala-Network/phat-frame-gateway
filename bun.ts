@@ -10,4 +10,7 @@ app.all('/ipfs/:cid/:key?', runJs)
 app.post('/vaults', zValidator('json', secretSchema), saveSecret)
 app.get('/vaults/:key/:token', zValidator('param', visitSecretSchema), getSecret)
 
-export default app
+export default {
+  port: Number(process.env.PORT) || 3000,
+  fetch: app.fetch,
+}
