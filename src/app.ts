@@ -118,7 +118,7 @@ export async function runJs<TContext extends Context>(c: TContext) {
       body = Buffer.from(buffer).toString()
     }
 
-    const key = c.req.param('key')
+    const key = c.req.query('key')
     let secret: any = undefined
     if (key) {
       const raw = await redis.get(key)

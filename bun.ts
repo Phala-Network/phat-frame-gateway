@@ -9,8 +9,8 @@ const app = new Hono()
 
 app.use('*', logger())
 app.use('*', timing())
-app.all('/run_js_from_ipfs/:cid/:key?', runJs)
-app.all('/ipfs/:cid/:key?', runJs)
+app.all('/run_js_from_ipfs/:cid{[a-zA-Z0-9\/]+}', runJs)
+app.all('/ipfs/:cid{[a-zA-Z0-9\/]+}', runJs)
 app.post('/vaults', zValidator('json', secretSchema), saveSecret)
 app.get('/vaults/:key/:token', zValidator('param', visitSecretSchema), getSecret)
 
