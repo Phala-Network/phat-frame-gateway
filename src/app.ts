@@ -85,7 +85,11 @@ export async function runJs<TContext extends Context>(c: TContext) {
   const redis = new Redis(process.env.VAULT_REDIS_URI)
 
   try {
-    const cid = c.req.param('cid')
+    let cid = c.req.param('cid')
+    let legacyKey: string | undefined = undefined
+    if (cid.indexOf('/') !== -1 && cid.indexOf('/0') === -1) {
+      [cid, legacyKey] = cid.split('/')
+    }
 
     //
     // Boot
@@ -122,7 +126,7 @@ export async function runJs<TContext extends Context>(c: TContext) {
       body = Buffer.from(buffer).toString()
     }
 
-    const key = c.req.query('key')
+    const key = c.req.query('key') || legacyKey
     let secret: any = undefined
     if (key) {
       const raw = await redis.get(key)
