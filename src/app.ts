@@ -14,6 +14,10 @@ import { memoize } from './memoize'
 
 interface RunResult extends Enum {
   asString: Text
+  asOther: Text
+
+  isString: boolean
+  isOther: boolean
 }
 
 const fetchAbi = memoize(
@@ -146,9 +150,13 @@ export async function runJs<TContext extends Context>(c: TContext) {
     const result = await contract.q.runJs<Result<RunResult, any>>({
       args: ['SidevmQuickJSWithPolyfill', code, [JSON.stringify(req)]]
     })
-    let payload = {body: 'Script returns malformed response.', status: 400, headers: {}}
+    let payload = { body: 'Script returns malformed response.', status: 400, headers: {} }
     try {
-      payload = JSON.parse(result.output?.asOk.asOk.asString.toString() ?? '{}')
+      if (result.output.asOk.asOk.isString) {
+        payload = JSON.parse(result.output?.asOk.asOk.asString.toString() ?? '{}')
+      } else {
+        payload.body =result.output.asOk.asOk.asOther.toString()
+      }
     } catch (err) {
       console.error(err)
     }
