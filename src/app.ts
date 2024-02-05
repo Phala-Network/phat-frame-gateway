@@ -27,7 +27,7 @@ const fetchAbi = memoize(
 const fetchIpfsFile = memoize(
   {
     keyGen: (cid: string) => `ipfs/${cid}`,
-    adapters: ['fs', 'redis'],
+    adapters: ['redis'],
   },
   (cid: string) => fetch(`https://cloudflare-ipfs.com/ipfs/${cid}`).then(r => r.text()),
 )
