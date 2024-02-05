@@ -141,6 +141,7 @@ export async function runJs<TContext extends Context>(c: TContext) {
     const req = {
       method: c.req.method,
       path: c.req.path,
+      queries: c.req.queries(),
       // @ts-ignore
       headers: Object.fromEntries(c.req.raw.headers.entries()),
       body,
