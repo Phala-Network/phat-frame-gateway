@@ -32,8 +32,8 @@ We already deploy an instance on https://frames.phatfn.xyz , give it a try: http
 Execute the JS script save on ipfs. `<cid>` is the file CID. *We don't support folder over ipfs.* `<secret_key>` is optional, and it's associated with `<cid>`, so your secret data only can access via associate `<cid>`.
 
 Example:
-- https://frames.phatfn.xyz/ipfs/QmZyGbFHvSebGPbEXjqC9m4gue3iJXjXd6NihNMgefPUwL
-- https://frames.phatfn.xyz/ipfs/QmZyGbFHvSebGPbEXjqC9m4gue3iJXjXd6NihNMgefPUwL/e781ef31210e0362
+- https://frames.phatfn.xyz/ipfs/Qmf45SsHFXXXTLG1Fv47jp1d8YR5po2LP1V9HJqoL1Nz6B/0
+- https://frames.phatfn.xyz/ipfs/Qmf45SsHFXXXTLG1Fv47jp1d8YR5po2LP1V9HJqoL1Nz6B/0?key=83240db6ccda883c
 
 
 ### `POST /vaults`
@@ -41,7 +41,7 @@ Example:
 Create a secret. The cURL example:
 
 ```
-curl https://frames.phatfn.xyz/vaults -H 'Content-Type: application/json' -d '{"cid": "QmZyGbFHvSebGPbEXjqC9m4gue3iJXjXd6NihNMgefPUwL", "data": {"name": "Jack"}}'
+curl https://frames.phatfn.xyz/vaults -H 'Content-Type: application/json' -d '{"cid": "Qmf45SsHFXXXTLG1Fv47jp1d8YR5po2LP1V9HJqoL1Nz6B/0", "data": {"name": "Jack"}}'
 ```
 
 It returns JSON contains `token` and `key`. `key` is use for specified secret in URL, and `token` is for inspection. For example we got response like:
@@ -50,11 +50,11 @@ It returns JSON contains `token` and `key`. `key` is use for specified secret in
 {"token":"e85ae53d2ba4ca8d","key":"e781ef31210e0362","succeed":true}
 ```
 
-You can compose the URL with the `key`: https://frames.phatfn.xyz/ipfs/QmZyGbFHvSebGPbEXjqC9m4gue3iJXjXd6NihNMgefPUwL/e781ef31210e0362
+You can compose the URL with the `key`: https://frames.phatfn.xyz/ipfs/Qmf45SsHFXXXTLG1Fv47jp1d8YR5po2LP1V9HJqoL1Nz6B/0?key=e781ef31210e0362
 
 You can also derive from an existing secret key:
 ```
-curl https://frames.phatfn.xyz/vaults -H 'Content-Type: application/json' -d '{"cid": "QmZyGbFHvSebGPbEXjqC9m4gue3iJXjXd6NihNMgefPUwL", "data": {"name": "Rose"}, "inherit": "31bfc649613a536f"}'
+curl https://frames.phatfn.xyz/vaults -H 'Content-Type: application/json' -d '{"cid": "Qmf45SsHFXXXTLG1Fv47jp1d8YR5po2LP1V9HJqoL1Nz6B/0", "data": {"name": "Rose"}, "inherit": "31bfc649613a536f"}'
 ```
 
 
@@ -64,6 +64,14 @@ Inspect a secret. The key and token should be matched. Example:
 
 ```
 curl https://frames.phatfn.xyz/vaults/e781ef31210e0362/e85ae53d2ba4ca8d
+```
+
+### `POST /ipfs`
+
+IPFS pinned service.
+
+```
+curl -F file=@examples/use-vaults/dist/index.js https://frames.phatfn.xyz/ipfs
 ```
 
 
