@@ -8,13 +8,12 @@ interface SerizliedRequest {
 }
 
 export default async function main(payload: string) {
-  const request: SerizliedRequest = JSON.parse(payload);
-  const answer = request.secret?.answer ?? '42'
   return JSON.stringify({
     headers: {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'public, no-transform, no-cache, must-revalidate, max-age=60, s-maxage=120',
+      'Content-Type': 'text/plain',
+      'Cache-Control': 'public, max-age: 60',
+      'Expires': new Date(Date.now() + 60 * 1000).toUTCString(),
     },
-    body: `{"answer": ${answer}}`
+    body: payload,
   })
 }

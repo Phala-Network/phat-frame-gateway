@@ -1,6 +1,7 @@
 interface SerizliedRequest {
   method: 'GET' | 'POST' | 'PATCH' | 'PUT';
   path: string;
+  queries: Record<string, string[]>;
   headers: Record<string, string>;
   body: string;
   secret?: Record<string, unknown>;
