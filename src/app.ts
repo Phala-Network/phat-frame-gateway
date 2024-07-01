@@ -5,7 +5,7 @@ import * as Bun from 'bun'
 import { cryptoWaitReady } from '@polkadot/util-crypto'
 import { HttpProvider, ApiPromise } from '@polkadot/api'
 import { Abi } from '@polkadot/api-contract/Abi'
-import { options, OnChainRegistry, KeyringPairProvider, unsafeGetAbiFromPatronByCodeHash, fetchMetadata, PinkContractPromise, type LiteralRpc, phalaTypes } from '@phala/sdk'
+import { options, OnChainRegistry, KeyringPairProvider, unsafeGetAbiFromGitHubRepoByCodeHash, fetchMetadata, PinkContractPromise, type LiteralRpc, phalaTypes } from '@phala/sdk'
 import Redis from 'ioredis'
 import * as z from 'zod'
 import * as R from 'ramda'
@@ -25,7 +25,7 @@ const fetchAbi = memoize(
     keyGen: (codeHash: string) => `abis/${codeHash}`,
     adapters: ['fs'],
   },
-  unsafeGetAbiFromPatronByCodeHash
+  unsafeGetAbiFromGitHubRepoByCodeHash
 )
 
 const fetchIpfsFile = memoize(
