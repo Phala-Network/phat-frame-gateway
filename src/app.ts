@@ -5,7 +5,7 @@ import * as Bun from 'bun'
 import { cryptoWaitReady } from '@polkadot/util-crypto'
 import { HttpProvider, ApiPromise } from '@polkadot/api'
 import { Abi } from '@polkadot/api-contract/Abi'
-import { options, OnChainRegistry, KeyringPairProvider, unsafeGetAbiFromPatronByCodeHash, fetchMetadata, PinkContractPromise, type LiteralRpc } from '@phala/sdk'
+import { options, OnChainRegistry, KeyringPairProvider, unsafeGetAbiFromPatronByCodeHash, fetchMetadata, PinkContractPromise, type LiteralRpc, phalaTypes } from '@phala/sdk'
 import Redis from 'ioredis'
 import * as z from 'zod'
 import * as R from 'ramda'
@@ -152,15 +152,52 @@ export async function runJs<TContext extends Context>(c: TContext) {
     // Transform to PRuntime Query and execute
     //
     startTime(c, 'execute')
-    const result = await contract.q.runJs<Result<RunResult, any>>({
+    const { result, output } = await contract.q.runJs<Result<RunResult, any>>({
       args: ['SidevmQuickJSWithPolyfill', code, [JSON.stringify(req)]]
     })
+    if (result.isErr) {
+      const rawExecuteError = result.asErr.toJSON() as unknown as string
+      if (result.asErr.isModule && result.asErr.asModule.index.toPrimitive() === 4) {
+        const moduleErr = phalaTypes.createType('ContractError', result.asErr.asModule.error).toJSON()
+        return c.body(JSON.stringify({
+          'ContractExecResult': rawExecuteError,
+          'error': moduleErr,
+        }), 500, {
+          'content-type': 'application/json'
+        })
+      }
+      return c.body(JSON.stringify({
+        'ContractExecResult': rawExecuteError,
+        'error': 'PRuntime Error',
+      }), 500, {
+        'content-type': 'application/json'
+      })
+    }
     let payload = { body: 'Script returns malformed response.', status: 400, headers: {} }
     try {
-      if (result.output.asOk.asOk.isString) {
-        payload = JSON.parse(result.output?.asOk.asOk.asString.toString() ?? '{}')
+      if (!output) {
+        return c.body('', 200) // Empty response.
+      }
+      if (output.isErr) {
+        return c.body(JSON.stringify({
+          'Output': output.asErr.toJSON() as unknown,
+          'error': 'Execution Error',
+        }), 500, {
+          'content-type': 'application/json'
+        })
+      }
+      if (output.asOk.isErr) {
+        return c.body(JSON.stringify({
+          'Output': output.asOk.asErr.toJSON() as unknown,
+          'error': 'Execution Error',
+        }), 500, {
+          'content-type': 'application/json'
+        })
+      }
+      if (output.asOk.asOk.isString) {
+        payload = JSON.parse(output?.asOk.asOk.asString.toString() ?? '{}')
       } else {
-        payload.body =result.output.asOk.asOk.asOther.toString()
+        payload.body =output.asOk.asOk.asOther.toString()
       }
     } catch (err) {
       console.error(err)
