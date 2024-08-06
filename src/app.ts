@@ -195,9 +195,15 @@ export async function runJs<TContext extends Context>(c: TContext) {
         })
       }
       if (output.asOk.asOk.isString) {
-        payload = JSON.parse(output?.asOk.asOk.asString.toString() ?? '{}')
+        let parsed = JSON.parse(output?.asOk.asOk.asString.toString() ?? '{}')
+        if (!parsed.success && parsed.error) {
+          payload = {"status": 500, "body": parsed.error, headers: {}}
+        } else {
+          payload = parsed
+        }
       } else {
-        payload.body =output.asOk.asOk.asOther.toString()
+        console.log('isOk', output.asOk.toJSON())
+        payload.body = JSON.stringify(output.asOk.asOk.toJSON())
       }
     } catch (err) {
       console.error(err)
